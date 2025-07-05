@@ -185,48 +185,51 @@ function shallowEqual(objA, objB) {
  *
  * @param {vscode.ExtensionContext} context
  */
-function handleSetTokenCmd(context) {
-    vscode.window
-        .showInputBox({
-            password: true,
-            prompt: 'Set authorization bearer token used when making requests to target backend.',
-            title: 'Bearer token',
-        })
-        .then((token) => {
-            if (token === undefined || token.trim() === '') {
-                vscode.window.showErrorMessage('No token provided.')
+async function handleSetTokenCmd(context) {
+    const token = await vscode.window.showInputBox({
+        password: true,
+        prompt: 'Set authorization bearer token used when making requests to target backend.',
+        title: 'Bearer token',
+    })
 
-                return
-            }
+    if (token === undefined || token.trim() === '') {
+        vscode.window.showErrorMessage('No token provided.')
+        return
+    }
 
-            context.secrets.store('token', token)
-            vscode.window.showErrorMessage(
-                'Token updated, extension restart requried.',
-            )
-        })
+    context.secrets.store('token', token)
+    const selection = await vscode.window.showInformationMessage(
+        'Token updated, extension restart requried.',
+        'Reload Window',
+    )
+    if (selection === 'Reload Window') {
+        vscode.commands.executeCommand('workbench.action.reloadWindow')
+    }
 }
 
 /**
  *
  * @param {vscode.ExtensionContext} context
  */
-function handleSetTargetCmd(context) {
-    vscode.window
-        .showInputBox({
-            prompt: 'Set target backend.',
-            title: 'Target backend',
-        })
-        .then((target) => {
-            if (target === undefined || target.trim() === '') {
-                vscode.window.showErrorMessage('No target provided.')
-                return
-            }
+async function handleSetTargetCmd(context) {
+    const target = await vscode.window.showInputBox({
+        prompt: 'Set target backend.',
+        title: 'Target backend',
+    })
 
-            context.secrets.store('target', target)
-            vscode.window.showErrorMessage(
-                'Target updated, extension restart requried.',
-            )
-        })
+    if (target === undefined || target.trim() === '') {
+        vscode.window.showErrorMessage('No target provided.')
+        return
+    }
+
+    context.globalState.update('target', target)
+    const selection = await vscode.window.showInformationMessage(
+        'Target updated, extension restart requried.',
+        'Reload Window',
+    )
+    if (selection === 'Reload Window') {
+        vscode.commands.executeCommand('workbench.action.reloadWindow')
+    }
 }
 
 module.exports = {
