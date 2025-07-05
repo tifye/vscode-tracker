@@ -1,0 +1,42 @@
+{
+    "name": "activity-tracker",
+    "publisher": "tifye",
+    "displayName": "Activity Tracker",
+    "description": "Reprot your Visual Studio Code activity to your specified backend",
+    "version": "0.0.1",
+    "engines": {
+        "vscode": "^1.101.2"
+    },
+    "categories": [
+        "Other"
+    ],
+    "activationEvents": [
+        "onStartupFinished"
+    ],
+    "main": "./extension.js",
+    "contributes": {
+        "commands": [
+            {
+                "command": "activity-tracker.setTarget",
+                "title": "Activity Tracker: Set target backend"
+            },
+            {
+                "command": "activity-tracker.setToken",
+                "title": "Activity Tracker: Set bearer token"
+            }
+        ]
+    },
+    "scripts": {
+        "lint": "eslint .",
+        "pretest": "npm run lint",
+        "test": "vscode-test"
+    },
+    "devDependencies": {
+        "@types/vscode": "^1.101.2",
+        "@types/mocha": "^10.0.10",
+        "@types/node": "20.x",
+        "eslint": "^9.25.1",
+        "@vscode/test-cli": "^0.0.11",
+        "@vscode/test-electron": "^2.5.2"
+    }
+}
