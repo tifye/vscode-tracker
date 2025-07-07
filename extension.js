@@ -1,4 +1,11 @@
 const vscode = require('vscode')
+const util = require('util')
+const path = require('path')
+const child_process = require('child_process')
+const exec = util.promisify(child_process.exec)
+
+/** @type {Set<string>} */
+const ignoredFiles = new Set()
 
 /** @type {NodeJS.Timeout | undefined} */
 let statePollInterval
@@ -33,6 +40,13 @@ let chan
  * @param {vscode.ExtensionContext} context
  */
 function activate(context) {
+    if (process.platform !== 'win32') {
+        vscode.window.showErrorMessage(
+            'Activity tracker only supported on Windows.',
+        )
+        return
+    }
+
     chan = vscode.window.createOutputChannel('Activity Tracker')
 
     const target = context.globalState.get('target')
@@ -89,11 +103,6 @@ async function pollState(target, token) {
     const sel = vscode.window.activeTextEditor.selection
     const view = doc.getText(getViewRange(sel, doc.lineCount))
 
-    // todo: use git-ignore
-    if (doc.fileName.includes('.env')) {
-        return
-    }
-
     /** @type {State} */
     const curState = {
         workspace: vscode.workspace.name,
@@ -108,7 +117,9 @@ async function pollState(target, token) {
         return
     }
 
+    const didChangeFile = prevState.fileName !== curState.fileName
     prevState = curState
+
     chan.appendLine('Updating state')
 
     if (updateStateAbortController !== undefined) {
@@ -116,6 +127,32 @@ async function pollState(target, token) {
     }
 
     updateStateAbortController = new AbortController()
+
+    if (didChangeFile) {
+        if (ignoredFiles.has(doc.fileName)) {
+            chan.appendLine(doc.fileName + ' is ignored (looked up from cache)')
+            return
+        }
+
+        const dir = path.dirname(doc.fileName)
+        const cmd = `git check-ignore ${doc.fileName} -q`
+        let isIgnored
+        try {
+            await exec(cmd, {
+                signal: updateStateAbortController.signal,
+                cwd: dir,
+            })
+        } catch (err) {
+            isIgnored = err.code === undefined || err.code !== 1
+        }
+
+        if (isIgnored === undefined || isIgnored === true) {
+            chan.appendLine(doc.fileName + ' is ignored')
+            ignoredFiles.add(doc.fileName)
+            return
+        }
+    }
+
     const url = target
     try {
         const resp = await fetch(url, {
