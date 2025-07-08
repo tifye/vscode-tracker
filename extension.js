@@ -7,11 +7,15 @@ const exec = util.promisify(child_process.exec)
 /** @type {Set<string>} */
 const ignoredFiles = new Set()
 
+/** @type {Map<string, string>} */
+const knownGitHubs = new Map()
+
 /** @type {NodeJS.Timeout | undefined} */
 let statePollInterval
 
 /** State of activity
  * @typedef {Object} State
+ * @property {string | undefined} repository url
  * @property {string} workspace
  * @property {string} fileName
  * @property {string} language
@@ -22,6 +26,7 @@ let statePollInterval
 
 /** @type {State} */
 let prevState = {
+    repository: '',
     workspace: '',
     fileName: '',
     language: '',
@@ -105,6 +110,7 @@ async function pollState(target, token) {
 
     /** @type {State} */
     const curState = {
+        repository: undefined,
         workspace: vscode.workspace.name,
         fileName: doc.fileName,
         language: doc.languageId,
@@ -117,22 +123,17 @@ async function pollState(target, token) {
         return
     }
 
-    const didChangeFile = prevState.fileName !== curState.fileName
-    prevState = curState
-
-    chan.appendLine('Updating state')
-
-    if (updateStateAbortController !== undefined) {
-        updateStateAbortController.abort()
-    }
-
-    updateStateAbortController = new AbortController()
-
     if (ignoredFiles.has(doc.fileName)) {
         chan.appendLine(doc.fileName + ' is ignored (looked up from cache)')
         return
     }
 
+    if (updateStateAbortController !== undefined) {
+        updateStateAbortController.abort()
+    }
+    updateStateAbortController = new AbortController()
+
+    const didChangeFile = prevState.fileName !== curState.fileName
     if (didChangeFile) {
         const dir = path.dirname(doc.fileName)
         const cmd = `git check-ignore ${doc.fileName} -q`
@@ -153,6 +154,16 @@ async function pollState(target, token) {
         }
     }
 
+    curState.repository = await findGitHubURL(
+        vscode.workspace.name,
+        doc.fileName,
+        updateStateAbortController.signal,
+    )
+
+    prevState = curState
+
+    chan.appendLine('Updating state')
+
     const url = target
     try {
         const resp = await fetch(url, {
@@ -171,6 +182,84 @@ async function pollState(target, token) {
     } catch (err) {
         chan.appendLine(`Something went wrong: ${err}`)
     }
+}
+
+/**
+ * @param {string} worksapce
+ * @param {string} activeFilename
+ * @param {AbortSignal} signal
+ * @returns {Promise<string?>}
+ */
+async function findGitHubURL(worksapce, activeFilename, signal) {
+    if (knownGitHubs.has(worksapce)) {
+        chan.appendLine(`${knownGitHubs.get(worksapce)} (looked up from cache)`)
+        return knownGitHubs.get(worksapce)
+    }
+
+    const dir = path.dirname(activeFilename)
+    const remotes = await getGitRemotes(dir, signal)
+    for (let i = 0; i < remotes.length; i++) {
+        const githubUrl = await getGitRemoteURL(dir, remotes[i], signal)
+        if (githubUrl !== undefined) {
+            knownGitHubs.set(worksapce, githubUrl)
+            chan.appendLine(githubUrl)
+            return githubUrl
+        }
+    }
+
+    return undefined
+}
+
+/**
+ *
+ * @param {string} dir
+ * @param {AbortSignal} signal
+ * @returns {Promise<string[]>}
+ */
+async function getGitRemotes(dir, signal) {
+    const cmd = `git remote`
+    try {
+        const { stdout } = await exec(cmd, {
+            signal,
+            cwd: dir,
+        })
+        return stdout.trim().split('\n')
+    } catch (err) {
+        chan.appendLine(`Get Git remotes: ${err}`)
+    }
+
+    return []
+}
+
+/**
+ *
+ * @param {string} dir
+ * @param {string} remote
+ * @param {AbortSignal} signal
+ * @returns {Promise<string?>}
+ */
+async function getGitRemoteURL(dir, remote, signal) {
+    const cmd = `git remote get-url --all ${remote}`
+    try {
+        const { stdout } = await exec(cmd, {
+            signal,
+            cwd: dir,
+        })
+
+        const urls = stdout.trim().split('\n')
+        for (let i = 0; i < urls.length; i++) {
+            let url = urls[i]
+            if (url.startsWith('git@github.com')) {
+                url = url.replace('git@github.com:', 'https://github.com/')
+                url = url.replace('.git', '')
+                return url
+            }
+        }
+    } catch (err) {
+        chan.appendLine(`Get GitHub UR for ${remote} in ${dir}: ${err}`)
+    }
+
+    return undefined
 }
 
 /**
