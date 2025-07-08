@@ -15,7 +15,6 @@ let statePollInterval
 
 /** State of activity
  * @typedef {Object} State
- * @property {string | undefined} repository url
  * @property {string} workspace
  * @property {string} fileName
  * @property {string} language
@@ -26,7 +25,6 @@ let statePollInterval
 
 /** @type {State} */
 let prevState = {
-    repository: '',
     workspace: '',
     fileName: '',
     language: '',
@@ -110,7 +108,6 @@ async function pollState(target, token) {
 
     /** @type {State} */
     const curState = {
-        repository: undefined,
         workspace: vscode.workspace.name,
         fileName: doc.fileName,
         language: doc.languageId,
@@ -121,6 +118,8 @@ async function pollState(target, token) {
 
     if (shallowEqual(prevState, curState)) {
         return
+    } else {
+        chan.appendLine('not equal')
     }
 
     if (ignoredFiles.has(doc.fileName)) {
@@ -154,7 +153,7 @@ async function pollState(target, token) {
         }
     }
 
-    curState.repository = await findGitHubURL(
+    const repository = await findGitHubURL(
         vscode.workspace.name,
         doc.fileName,
         updateStateAbortController.signal,
@@ -172,7 +171,10 @@ async function pollState(target, token) {
                 Authorization: `Bearer ${token}`,
                 'Content-Type': 'application/json',
             },
-            body: JSON.stringify(curState),
+            body: JSON.stringify({
+                repository,
+                ...curState,
+            }),
             signal: updateStateAbortController.signal,
         })
 
