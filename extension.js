@@ -128,12 +128,12 @@ async function pollState(target, token) {
 
     updateStateAbortController = new AbortController()
 
-    if (didChangeFile) {
-        if (ignoredFiles.has(doc.fileName)) {
-            chan.appendLine(doc.fileName + ' is ignored (looked up from cache)')
-            return
-        }
+    if (ignoredFiles.has(doc.fileName)) {
+        chan.appendLine(doc.fileName + ' is ignored (looked up from cache)')
+        return
+    }
 
+    if (didChangeFile) {
         const dir = path.dirname(doc.fileName)
         const cmd = `git check-ignore ${doc.fileName} -q`
         let isIgnored
