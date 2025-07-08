@@ -29,7 +29,8 @@
     "scripts": {
         "lint": "eslint .",
         "pretest": "npm run lint",
-        "test": "vscode-test"
+        "test": "vscode-test",
+        "build": "npx vsce package"
     },
     "devDependencies": {
         "@types/vscode": "^1.101.2",
